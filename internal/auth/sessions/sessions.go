@@ -1,6 +1,8 @@
 package sessions
 
 import (
+	"crypto/subtle"
+	"encoding/base64"
 	"net/http"
 	"net/url"
 	"time"
@@ -37,8 +39,13 @@ func RequireWithReturnTo(responseWriter http.ResponseWriter, request *http.Reque
 	return accounts.CurrentSession{}, false, nil
 }
 
-func CSRFTokensMatch(_, _ string) bool {
-	return true
+func CSRFTokensMatch(expected, provided string) bool {
+	expectedByte, errEx := base64.RawURLEncoding.DecodeString(expected)
+	providedByte, errPr := base64.RawURLEncoding.DecodeString(provided)
+	if errEx != nil || errPr != nil {
+		return false
+	}
+	return len(expected) == len(provided) && subtle.ConstantTimeCompare(expectedByte, providedByte) == 1
 }
 
 func HasRecentAuthentication(current accounts.CurrentSession, now time.Time) bool {
