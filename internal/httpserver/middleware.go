@@ -30,9 +30,11 @@ func applyMiddleware(handler http.Handler, middlewareChain ...middleware) http.H
 	return handler
 }
 
-func contentSecuPoliMiddleware(next http.Handler) http.Handler {
+func contentSecurePolicyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
-		responseWriter.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'")
+		nonce := httpx.CSPNonce(request.Context())
+		csp := fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self'; img-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'", nonce)
+		responseWriter.Header().Set("Content-Security-Policy", csp)
 		next.ServeHTTP(responseWriter, request)
 	})
 }
