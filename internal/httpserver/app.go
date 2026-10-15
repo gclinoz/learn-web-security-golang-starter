@@ -38,19 +38,19 @@ const (
 )
 
 type Options struct {
-	AppOrigin               string
-	MaxPublicProductResults int
-	MaxRequestBodyBytes     int64
-	MaxUploadBytes          int64
-	PawPalAPIKey            string
-	AcornFulfillmentDelay   time.Duration
-	EncryptionKeyring       *storage.Keyring
-	DataDirectory           string
-	FixtureDirectory        string
-	TemplateDirectory       string
-	PublicDirectory         string
-	DownloadSigningKey      [32]byte
-	TrustedProxyHops        int
+	AppOrigin                  string
+	MaxPublicProductResults    int
+	MaxRequestBodyBytes        int64
+	MaxUploadBytes             int64
+	PawPalAPIKey               string
+	AcornFulfillmentDelay      time.Duration
+	EncryptionKeyring          *storage.Keyring
+	DataDirectory              string
+	FixtureDirectory           string
+	TemplateDirectory          string
+	PublicDirectory            string
+	DownloadSigningKey         [32]byte
+	TrustedProxyHops           int
 }
 
 type Application struct {

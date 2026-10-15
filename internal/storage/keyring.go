@@ -62,11 +62,44 @@ func (keyring *Keyring) ActiveVersion() string {
 }
 
 func (keyring *Keyring) Encrypt(plaintext []byte) (string, error) {
-	return string(plaintext), nil
+	configKey, err := requireKeyring(keyring)
+	if err != nil {
+		return "", err
+	}
+	activeKey, exists := configKey.keys[configKey.activeVersion]
+	if !exists {
+		return "", fmt.Errorf("the keyring does not contain its active encryption key")
+	}
+	encrypted, err := encrypt(plaintext, activeKey, configKey.randomSource)
+	if err != nil {
+		return "", err
+	}
+	return serializeEncryptedPayload(versionedEncryptedPayload{
+		KeyVersion: configKey.activeVersion,
+		Nonce:      encrypted.Nonce,
+		AuthTag:    encrypted.AuthTag,
+		Ciphertext: encrypted.Ciphertext,
+	})
 }
 
 func (keyring *Keyring) Decrypt(serialized string) ([]byte, error) {
-	return []byte(serialized), nil
+	configKey, err := requireKeyring(keyring)
+	if err != nil {
+		return nil, err
+	}
+	value, err := deserializeEncryptedPayload(serialized)
+	if err != nil {
+		return nil, err
+	}
+	payloadKey, exists := configKey.keys[value.KeyVersion]
+	if !exists {
+		return nil, fmt.Errorf("unknown encryption key version: %s", value.KeyVersion)
+	}
+	return Decrypt(EncryptedPayload{
+		Nonce:      value.Nonce,
+		AuthTag:    value.AuthTag,
+		Ciphertext: value.Ciphertext,
+	}, payloadKey)
 }
 
 func requireKeyring(keyring *Keyring) (*Keyring, error) {

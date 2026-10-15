@@ -5,10 +5,11 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"fmt"
+	"io"
 )
 
 const (
-	nonceLength = 12
+	nonceLength             = 12
 	authenticationTagLength = 16
 )
 
@@ -19,6 +20,10 @@ type EncryptedPayload struct {
 }
 
 func Encrypt(plaintext []byte, key [32]byte) (EncryptedPayload, error) {
+	return encrypt(plaintext, key, rand.Reader)
+}
+
+func encrypt(plaintext []byte, key [32]byte, randomSource io.Reader) (EncryptedPayload, error) {
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
 		return EncryptedPayload{}, err
@@ -28,7 +33,7 @@ func Encrypt(plaintext []byte, key [32]byte) (EncryptedPayload, error) {
 		return EncryptedPayload{}, err
 	}
 	nonce := make([]byte, nonceLength)
-	if _, err := rand.Read(nonce); err != nil {
+	if _, err := io.ReadFull(randomSource, nonce); err != nil {
 		return EncryptedPayload{}, err
 	}
 	sealed := aead.Seal(nil, nonce, plaintext, nil)

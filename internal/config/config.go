@@ -80,7 +80,7 @@ func Parse(environment map[string]string, workingDirectory string) (Config, erro
 		return Config{}, err
 	}
 
-	activeEncryptionKeyVersion, encryptionKeys, err := parseOptionalEncryptionKeys(environment)
+	activeEncryptionKeyVersion, encryptionKeys, err := parseEncryptionKeys(environment)
 	if err != nil {
 		return Config{}, err
 	}
@@ -185,21 +185,6 @@ func parseDelay(value string) (time.Duration, error) {
 		return 0, errors.New("ACORN_FULFILLMENT_DELAY_MS is too large")
 	}
 	return time.Duration(milliseconds * float64(time.Millisecond)), nil
-}
-
-func parseOptionalEncryptionKeys(environment map[string]string) (string, map[string][32]byte, error) {
-	_, hasActiveVersion := environment[activeEncryptionVersionEnv]
-	hasEncryptionKey := false
-	for name := range environment {
-		if strings.HasPrefix(name, encryptionKeyEnvPrefix) {
-			hasEncryptionKey = true
-			break
-		}
-	}
-	if !hasActiveVersion && !hasEncryptionKey {
-		return "", nil, nil
-	}
-	return parseEncryptionKeys(environment)
 }
 
 func parseEncryptionKeys(environment map[string]string) (string, map[string][32]byte, error) {
