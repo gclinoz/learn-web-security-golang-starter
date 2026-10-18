@@ -116,6 +116,20 @@ func (handler *authHandler) Login(responseWriter http.ResponseWriter, request *h
 		handler.internalError(responseWriter, request, err)
 		return
 	}
+
+	if outdated := passwords.NeedsRehash(user.PasswordHash); outdated {
+		passwordHash, err := passwords.Hash(password)
+		if err != nil {
+			handler.internalError(responseWriter, request, err)
+			return
+		}
+		err = handler.accounts.UpdatePasswordHash(request.Context(), user.ID, passwordHash)
+		if err != nil {
+			handler.internalError(responseWriter, request, err)
+			return
+		}
+	}
+
 	handler.logAuthenticationEvent(request, "login_attempt", map[string]any{
 		"email":     user.Email,
 		"userId":    user.ID,
