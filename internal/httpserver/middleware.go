@@ -1,5 +1,3 @@
-//lint:file-ignore U1000 Some code in this file is used later
-
 package httpserver
 
 import (
@@ -226,9 +224,17 @@ func (limiter *fixedWindowLimiter) reject(responseWriter http.ResponseWriter, re
 }
 
 func fixedWindowRateLimiter(options rateLimitOptions) middleware {
-	validateRateLimitOptions(options)
+	limiter := newFixedWindowLimiter(options)
 	return func(next http.Handler) http.Handler {
-		return next
+		return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+			state, over := limiter.consume(request)
+			if over {
+				limiter.reject(responseWriter, request, state)
+				return
+			}
+			setRateLimitHeaders(responseWriter, state)
+			next.ServeHTTP(responseWriter, request)
+		})
 	}
 }
 

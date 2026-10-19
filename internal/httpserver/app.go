@@ -38,19 +38,19 @@ const (
 )
 
 type Options struct {
-	AppOrigin                  string
-	MaxPublicProductResults    int
-	MaxRequestBodyBytes        int64
-	MaxUploadBytes             int64
-	PawPalAPIKey               string
-	AcornFulfillmentDelay      time.Duration
-	EncryptionKeyring          *storage.Keyring
-	DataDirectory              string
-	FixtureDirectory           string
-	TemplateDirectory          string
-	PublicDirectory            string
-	DownloadSigningKey         [32]byte
-	TrustedProxyHops           int
+	AppOrigin               string
+	MaxPublicProductResults int
+	MaxRequestBodyBytes     int64
+	MaxUploadBytes          int64
+	PawPalAPIKey            string
+	AcornFulfillmentDelay   time.Duration
+	EncryptionKeyring       *storage.Keyring
+	DataDirectory           string
+	FixtureDirectory        string
+	TemplateDirectory       string
+	PublicDirectory         string
+	DownloadSigningKey      [32]byte
+	TrustedProxyHops        int
 }
 
 type Application struct {
@@ -213,7 +213,15 @@ func New(database *sql.DB, logger *logging.Logger, options Options) (*Applicatio
 		}
 	})
 
-	dynamicHandler := sourceValidate(options.AppOrigin, renderer)(dynamicMux)
+	dynamicHandler := applyMiddleware(
+		dynamicMux,
+		fixedWindowRateLimiter(rateLimitOptions{
+			window:  time.Minute,
+			maximum: 100,
+			key:     clientIPKeyWithTrustedProxies(options.TrustedProxyHops),
+		}),
+		sourceValidate(options.AppOrigin, renderer),
+	)
 
 	mainMux := http.NewServeMux()
 	mainMux.HandleFunc("GET /health", func(responseWriter http.ResponseWriter, _ *http.Request) {
