@@ -17,6 +17,7 @@ import (
 	"github.com/bootdotdev/learn-web-security/internal/httpx"
 	"github.com/bootdotdev/learn-web-security/internal/logging"
 	"github.com/bootdotdev/learn-web-security/internal/templates"
+	"github.com/bootdotdev/learn-web-security/internal/accounts"
 )
 
 type middleware func(http.Handler) http.Handler
@@ -268,6 +269,11 @@ func clientIPKeyWithTrustedProxies(trustedProxyHops int) func(*http.Request) str
 		}
 		return clientIPKey(request)
 	}
+}
+
+func clientEmailKey(request *http.Request) string {
+	raw := request.PostForm.Get("email")
+	return accounts.NormalizeEmail(raw)
 }
 
 func boolToInt64(value bool) int64 {
