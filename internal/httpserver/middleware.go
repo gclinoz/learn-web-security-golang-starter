@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/bootdotdev/learn-web-security/internal/accounts"
 	"github.com/bootdotdev/learn-web-security/internal/httpx"
 	"github.com/bootdotdev/learn-web-security/internal/logging"
 	"github.com/bootdotdev/learn-web-security/internal/templates"
-	"github.com/bootdotdev/learn-web-security/internal/accounts"
 )
 
 type middleware func(http.Handler) http.Handler
@@ -113,10 +113,19 @@ func LoadShedder(_ int, _ int) func(http.Handler) http.Handler {
 	}
 }
 
-func SearchThrottle(_ *templates.Renderer) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return next
-	}
+func SearchThrottle(renderer *templates.Renderer) func(http.Handler) http.Handler {
+	return fixedWindowRateLimiter(rateLimitOptions{
+		window:  time.Second,
+		maximum: 5,
+		key: func(*http.Request) string {
+			return "sharedCounter"
+		},
+		onLimit: func(responseWriter http.ResponseWriter, _ *http.Request, _ rateLimitState) {
+			if err := httpx.RespondWithErrorPage(responseWriter, renderer, http.StatusTooManyRequests, "Search Is Busy", "Try again shortly."); err != nil {
+				http.Error(responseWriter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+		},
+	})
 }
 
 type rateLimitCounter struct {
