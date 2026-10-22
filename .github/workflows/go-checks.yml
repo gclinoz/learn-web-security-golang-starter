@@ -1,7 +1,6 @@
 name: Go checks
 
 on:
-  push:
   pull_request:
 
 permissions:
