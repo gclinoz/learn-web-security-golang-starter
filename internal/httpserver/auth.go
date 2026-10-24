@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/bootdotdev/learn-web-security/internal/botdetection"
 	"github.com/bootdotdev/learn-web-security/internal/accounts"
 	"github.com/bootdotdev/learn-web-security/internal/auth/mfa"
 	"github.com/bootdotdev/learn-web-security/internal/auth/passwordreset"
@@ -196,6 +197,11 @@ func (handler *authHandler) Signup(responseWriter http.ResponseWriter, request *
 		handler.internalError(responseWriter, request, err)
 		return
 	}
+
+	if botSuspect := botdetection.ProtectSignup(responseWriter, request, handler.renderer); botSuspect {
+		return
+	}
+
 	user, err := handler.accounts.CreateCustomer(request.Context(), email, displayName, passwordHash)
 	if err != nil {
 		if errors.Is(err, accounts.ErrEmailExists) {
