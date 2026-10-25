@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"uuid"
 
 	"github.com/bootdotdev/learn-web-security/internal/accounts"
 	"github.com/bootdotdev/learn-web-security/internal/httpx"
@@ -22,11 +24,25 @@ import (
 
 type middleware func(http.Handler) http.Handler
 
+type customUUIDKey string
+
+const sharedKey = customUUIDKey("uuid")
+
 func applyMiddleware(handler http.Handler, middlewareChain ...middleware) http.Handler {
 	for _, currentMiddleware := range slices.Backward(middlewareChain) {
 		handler = currentMiddleware(handler)
 	}
 	return handler
+}
+
+func requestUUID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		newID := uuid.NewV4()
+		responseWriter.Header().Set("X-Request-ID", newID.String())
+		ctx := context.WithValue(request.Context(), sharedKey, newID)
+		request = request.WithContext(ctx)
+		next.ServeHTTP(responseWriter, request)
+	})
 }
 
 func securityHeaders(next http.Handler) http.Handler {

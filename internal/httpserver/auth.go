@@ -5,14 +5,15 @@ import (
 	"net/http"
 	"strings"
 	"unicode/utf8"
+	"uuid"
 
-	"github.com/bootdotdev/learn-web-security/internal/botdetection"
 	"github.com/bootdotdev/learn-web-security/internal/accounts"
 	"github.com/bootdotdev/learn-web-security/internal/auth/mfa"
 	"github.com/bootdotdev/learn-web-security/internal/auth/passwordreset"
 	"github.com/bootdotdev/learn-web-security/internal/auth/passwords"
 	"github.com/bootdotdev/learn-web-security/internal/auth/returnto"
 	"github.com/bootdotdev/learn-web-security/internal/auth/sessions"
+	"github.com/bootdotdev/learn-web-security/internal/botdetection"
 	"github.com/bootdotdev/learn-web-security/internal/httpx"
 	"github.com/bootdotdev/learn-web-security/internal/logging"
 	"github.com/bootdotdev/learn-web-security/internal/templates"
@@ -29,22 +30,24 @@ type authPage struct {
 }
 
 type authHandler struct {
-	accounts       *accounts.Store
-	renderer       *templates.Renderer
-	logger         *logging.Logger
-	mfa            *mfa.Store
-	passwordResets *passwordreset.Store
-	appOrigin      string
+	accounts         *accounts.Store
+	renderer         *templates.Renderer
+	logger           *logging.Logger
+	mfa              *mfa.Store
+	passwordResets   *passwordreset.Store
+	appOrigin        string
+	trustedProxyHops int
 }
 
-func newAuthHandler(accountStore *accounts.Store, mfaStore *mfa.Store, passwordResetStore *passwordreset.Store, renderer *templates.Renderer, logger *logging.Logger, appOrigin string) *authHandler {
+func newAuthHandler(accountStore *accounts.Store, mfaStore *mfa.Store, passwordResetStore *passwordreset.Store, renderer *templates.Renderer, logger *logging.Logger, appOrigin string, trustedProxyHops int) *authHandler {
 	return &authHandler{
-		accounts:       accountStore,
-		renderer:       renderer,
-		logger:         logger,
-		mfa:            mfaStore,
-		passwordResets: passwordResetStore,
-		appOrigin:      appOrigin,
+		accounts:         accountStore,
+		renderer:         renderer,
+		logger:           logger,
+		mfa:              mfaStore,
+		passwordResets:   passwordResetStore,
+		appOrigin:        appOrigin,
+		trustedProxyHops: trustedProxyHops,
 	}
 }
 
@@ -308,7 +311,21 @@ func (handler *authHandler) internalError(responseWriter http.ResponseWriter, re
 	}
 }
 
-func (handler *authHandler) logAuthenticationEvent(_ *http.Request, eventName string, fields map[string]any) {
+func (handler *authHandler) logAuthenticationEvent(request *http.Request, eventName string, fields map[string]any) {
+	fields["requestId"] = nil
+	fields["outcome"] = "failure"
+	if extractedID, ok := request.Context().Value(sharedKey).(uuid.UUID); ok {
+		fields["requestId"] = extractedID.String()
+	}
+	fields["sourceIp"] = clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request)
+	if extractedUser, ok := fields["userId"]; ok {
+		fields["userId"] = extractedUser
+	} else {
+		fields["userId"] = nil
+	}
+	if success, ok := fields["success"].(bool); ok && success {
+		fields["outcome"] = "success"
+	}
 	_ = handler.logger.Event(eventName, fields)
 }
 
