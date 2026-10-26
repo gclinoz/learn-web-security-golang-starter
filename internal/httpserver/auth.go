@@ -16,6 +16,7 @@ import (
 	"github.com/bootdotdev/learn-web-security/internal/botdetection"
 	"github.com/bootdotdev/learn-web-security/internal/httpx"
 	"github.com/bootdotdev/learn-web-security/internal/logging"
+	"github.com/bootdotdev/learn-web-security/internal/observability"
 	"github.com/bootdotdev/learn-web-security/internal/templates"
 )
 
@@ -37,9 +38,11 @@ type authHandler struct {
 	passwordResets   *passwordreset.Store
 	appOrigin        string
 	trustedProxyHops int
+	failTracker      *observability.AuthAlertThreshold
+	resetTracker     *observability.AuthAlertThreshold
 }
 
-func newAuthHandler(accountStore *accounts.Store, mfaStore *mfa.Store, passwordResetStore *passwordreset.Store, renderer *templates.Renderer, logger *logging.Logger, appOrigin string, trustedProxyHops int) *authHandler {
+func newAuthHandler(accountStore *accounts.Store, mfaStore *mfa.Store, passwordResetStore *passwordreset.Store, renderer *templates.Renderer, logger *logging.Logger, appOrigin string, trustedProxyHops int, failTracker *observability.AuthAlertThreshold, resetTracker *observability.AuthAlertThreshold) *authHandler {
 	return &authHandler{
 		accounts:         accountStore,
 		renderer:         renderer,
@@ -48,6 +51,8 @@ func newAuthHandler(accountStore *accounts.Store, mfaStore *mfa.Store, passwordR
 		passwordResets:   passwordResetStore,
 		appOrigin:        appOrigin,
 		trustedProxyHops: trustedProxyHops,
+		failTracker:      failTracker,
+		resetTracker:     resetTracker,
 	}
 }
 
@@ -87,6 +92,13 @@ func (handler *authHandler) Login(responseWriter http.ResponseWriter, request *h
 		return
 	}
 	if !found || !passwords.Verify(password, user.PasswordHash) {
+		var trackerUserID any = nil
+		if found {
+			trackerUserID = user.ID
+		}
+		if requestID, ok := request.Context().Value(sharedKey).(uuid.UUID); ok {
+			handler.failTracker.Record(requestID, clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request), trackerUserID)
+		}
 		handler.logAuthenticationEvent(request, "login_attempt", map[string]any{
 			"email":         email,
 			"success":       false,

@@ -30,6 +30,7 @@ import (
 	"github.com/bootdotdev/learn-web-security/internal/support"
 	"github.com/bootdotdev/learn-web-security/internal/templates"
 	"github.com/bootdotdev/learn-web-security/internal/uploads"
+	"github.com/bootdotdev/learn-web-security/internal/observability"
 )
 
 type Options struct {
@@ -119,7 +120,9 @@ func New(database *sql.DB, logger *logging.Logger, options Options) (*Applicatio
 		filepath.Join(options.DataDirectory, "bulk-tax-documents"),
 		options.MaxUploadBytes,
 	)
-	authenticationHandler := newAuthHandler(accountStore, mfaStore, passwordResetStore, renderer, logger, options.AppOrigin, options.TrustedProxyHops)
+	failTracker := observability.NewAuthAlertThreshold("failed_logins", 3, 5 * time.Minute, logger)
+	resetTracker := observability.NewAuthAlertThreshold("password_reset_requests", 3, 10 * time.Minute, logger)
+	authenticationHandler := newAuthHandler(accountStore, mfaStore, passwordResetStore, renderer, logger, options.AppOrigin, options.TrustedProxyHops, failTracker, resetTracker)
 	passkeyHandler, err := passkeys.NewHandler(
 		options.AppOrigin,
 		accountStore,
