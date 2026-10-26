@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-	"uuid"
 
 	"github.com/bootdotdev/learn-web-security/internal/accounts"
 	"github.com/bootdotdev/learn-web-security/internal/auth/mfa"
@@ -128,9 +127,6 @@ func (handler *authHandler) TOTPLogin(responseWriter http.ResponseWriter, reques
 		return
 	}
 	if !verified {
-		if requestID, ok := request.Context().Value(sharedKey).(uuid.UUID); ok {
-			handler.failTracker.Record(requestID, clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request), user.ID)
-		}
 		exhausted, err := handler.mfa.RecordChallengeFailure(request.Context(), challengeToken)
 		if err != nil {
 			handler.internalError(responseWriter, request, err)
@@ -143,6 +139,11 @@ func (handler *authHandler) TOTPLogin(responseWriter http.ResponseWriter, reques
 			"failureReason": "totp code mismatch",
 			"returnTo":      challenge.ReturnTo,
 		})
+		handler.failTracker.Record(
+			requestID(request.Context()),
+			clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request),
+			user.ID,
+		)
 		if exhausted {
 			clearTOTPLoginChallengeCookie(responseWriter)
 			http.Redirect(responseWriter, request, verificationRestartLoginPath(challenge.ReturnTo), http.StatusFound)
@@ -301,19 +302,17 @@ func (handler *authHandler) RequestPasswordReset(responseWriter http.ResponseWri
 		handler.internalError(responseWriter, request, err)
 		return
 	}
-	var trackerUserID any = nil
-	if found {
-		trackerUserID = user.ID
-	}
-	if requestID, ok := request.Context().Value(sharedKey).(uuid.UUID); ok {
-		handler.resetTracker.Record(requestID, clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request), trackerUserID)
-	}
 	if !found {
 		handler.logAuthenticationEvent(request, "password_reset_request", map[string]any{
 			"email":         email,
 			"success":       false,
 			"failureReason": "email not found",
 		})
+		handler.resetTracker.Record(
+			requestID(request.Context()),
+			clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request),
+			nil,
+		)
 		if err := handler.renderPasswordResetRequest(responseWriter, http.StatusOK, true, "", ""); err != nil {
 			handler.internalError(responseWriter, request, err)
 		}
@@ -337,6 +336,11 @@ func (handler *authHandler) RequestPasswordReset(responseWriter http.ResponseWri
 		"resetToken": resetToken.Value,
 		"resetLink":  resetLink,
 	})
+	handler.resetTracker.Record(
+		requestID(request.Context()),
+		clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request),
+		user.ID,
+	)
 	if err := handler.renderPasswordResetRequest(responseWriter, http.StatusOK, true, "", ""); err != nil {
 		handler.internalError(responseWriter, request, err)
 	}

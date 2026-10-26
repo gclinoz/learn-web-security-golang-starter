@@ -23,6 +23,7 @@ import (
 	"github.com/bootdotdev/learn-web-security/internal/imagepreview"
 	"github.com/bootdotdev/learn-web-security/internal/integrations/pawpal"
 	"github.com/bootdotdev/learn-web-security/internal/logging"
+	"github.com/bootdotdev/learn-web-security/internal/observability"
 	"github.com/bootdotdev/learn-web-security/internal/orders"
 	"github.com/bootdotdev/learn-web-security/internal/reviews"
 	"github.com/bootdotdev/learn-web-security/internal/storage"
@@ -30,7 +31,6 @@ import (
 	"github.com/bootdotdev/learn-web-security/internal/support"
 	"github.com/bootdotdev/learn-web-security/internal/templates"
 	"github.com/bootdotdev/learn-web-security/internal/uploads"
-	"github.com/bootdotdev/learn-web-security/internal/observability"
 )
 
 type Options struct {
@@ -120,8 +120,8 @@ func New(database *sql.DB, logger *logging.Logger, options Options) (*Applicatio
 		filepath.Join(options.DataDirectory, "bulk-tax-documents"),
 		options.MaxUploadBytes,
 	)
-	failTracker := observability.NewAuthAlertThreshold("failed_logins", 3, 5 * time.Minute, logger)
-	resetTracker := observability.NewAuthAlertThreshold("password_reset_requests", 3, 10 * time.Minute, logger)
+	failTracker := observability.NewAuthAlertThreshold("failed_logins", 3, 5*time.Minute, logger)
+	resetTracker := observability.NewAuthAlertThreshold("password_reset_requests", 3, 10*time.Minute, logger)
 	authenticationHandler := newAuthHandler(accountStore, mfaStore, passwordResetStore, renderer, logger, options.AppOrigin, options.TrustedProxyHops, failTracker, resetTracker)
 	passkeyHandler, err := passkeys.NewHandler(
 		options.AppOrigin,
@@ -283,7 +283,7 @@ func New(database *sql.DB, logger *logging.Logger, options Options) (*Applicatio
 		cspNonce,
 		securityHeaders,
 		recoverPanics(logger, renderer),
-		requestUUID,
+		assignRequestUUID,
 	)
 	return &Application{Handler: handler, publicRoot: publicRoot}, nil
 }

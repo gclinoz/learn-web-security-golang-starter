@@ -2,10 +2,10 @@ package httpserver
 
 import (
 	"errors"
+	"maps"
 	"net/http"
 	"strings"
 	"unicode/utf8"
-	"uuid"
 
 	"github.com/bootdotdev/learn-web-security/internal/accounts"
 	"github.com/bootdotdev/learn-web-security/internal/auth/mfa"
@@ -92,19 +92,18 @@ func (handler *authHandler) Login(responseWriter http.ResponseWriter, request *h
 		return
 	}
 	if !found || !passwords.Verify(password, user.PasswordHash) {
-		var trackerUserID any = nil
-		if found {
-			trackerUserID = user.ID
-		}
-		if requestID, ok := request.Context().Value(sharedKey).(uuid.UUID); ok {
-			handler.failTracker.Record(requestID, clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request), trackerUserID)
-		}
 		handler.logAuthenticationEvent(request, "login_attempt", map[string]any{
 			"email":         email,
 			"success":       false,
 			"failureReason": loginFailureReason(found),
 			"returnTo":      returnTo,
 		})
+		userID := nullableInt64(user.ID, found)
+		handler.failTracker.Record(
+			requestID(request.Context()),
+			clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request),
+			userID,
+		)
 		if err := handler.renderLogin(responseWriter, http.StatusUnauthorized, "Invalid email or password", returnTo); err != nil {
 			handler.internalError(responseWriter, request, err)
 		}
@@ -324,21 +323,16 @@ func (handler *authHandler) internalError(responseWriter http.ResponseWriter, re
 }
 
 func (handler *authHandler) logAuthenticationEvent(request *http.Request, eventName string, fields map[string]any) {
-	fields["requestId"] = nil
-	fields["outcome"] = "failure"
-	if extractedID, ok := request.Context().Value(sharedKey).(uuid.UUID); ok {
-		fields["requestId"] = extractedID.String()
+	eventFields := make(map[string]any, len(fields)+4)
+	maps.Copy(eventFields, fields)
+	eventFields["requestId"] = requestID(request.Context()).String()
+	eventFields["sourceIp"] = clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request)
+	eventFields["userId"] = fields["userId"]
+	eventFields["outcome"] = "failure"
+	if success, _ := fields["success"].(bool); success {
+		eventFields["outcome"] = "success"
 	}
-	fields["sourceIp"] = clientIPKeyWithTrustedProxies(handler.trustedProxyHops)(request)
-	if extractedUser, ok := fields["userId"]; ok {
-		fields["userId"] = extractedUser
-	} else {
-		fields["userId"] = nil
-	}
-	if success, ok := fields["success"].(bool); ok && success {
-		fields["outcome"] = "success"
-	}
-	_ = handler.logger.Event(eventName, fields)
+	_ = handler.logger.Event(eventName, eventFields)
 }
 
 func safeReturnTo(value string) string {
